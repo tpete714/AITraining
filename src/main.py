@@ -217,7 +217,8 @@ async def get_maintenance_schedule(
         raise HTTPException(status_code=404, detail="Maintenance schedule not found")
 
     cursor = await db.execute(
-        "SELECT MAX(due_at) FROM maintenance_events WHERE asset_id = ? AND completed = 1",
+        "SELECT MAX(due_at) FROM maintenance_events WHERE asset_id = ? AND completed = 1 "
+        "AND due_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
         (asset_id,),
     )
     last_performed_at = (await cursor.fetchone())[0]
@@ -228,9 +229,12 @@ async def get_maintenance_schedule(
     base = last_performed_at or installed_date
     next_due_at = None
     if base is not None:
-        next_due_at = (
-            date.fromisoformat(base) + timedelta(days=schedule["interval_days"])
-        ).isoformat()
+        try:
+            next_due_at = (
+                date.fromisoformat(base) + timedelta(days=schedule["interval_days"])
+            ).isoformat()
+        except ValueError:
+            pass
 
     return {
         "asset_id": schedule["asset_id"],
