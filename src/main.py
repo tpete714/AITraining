@@ -14,6 +14,8 @@ from .schemas import (
     LocationOut,
     MaintenanceEventCreate,
     MaintenanceEventOut,
+    MaintenanceScheduleIn,
+    MaintenanceScheduleOut,
 )
 
 
@@ -167,6 +169,33 @@ async def list_maintenance_events(
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
+
+
+@app.put(
+    "/assets/{asset_id}/maintenance-schedule",
+    response_model=MaintenanceScheduleOut,
+)
+async def set_maintenance_schedule(
+    asset_id: int,
+    body: MaintenanceScheduleIn,
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    await _require_asset(asset_id, db)
+    await db.execute(
+        "INSERT INTO maintenance_schedules (asset_id, task, interval_days) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT(asset_id) DO UPDATE SET "
+        "task = excluded.task, interval_days = excluded.interval_days",
+        (asset_id, body.task, body.interval_days),
+    )
+    await db.commit()
+    return {
+        "asset_id": asset_id,
+        "task": body.task,
+        "interval_days": body.interval_days,
+        "last_performed_at": None,
+        "next_due_at": None,
+    }
 
 
 # Serve the static dashboard UI at "/". Mounted last so API routes take precedence.
