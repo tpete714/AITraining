@@ -41,6 +41,13 @@ async def create_schema(db):
             completed INTEGER NOT NULL DEFAULT 0
         )
     """)
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance_schedules (
+            asset_id INTEGER PRIMARY KEY REFERENCES assets(id),
+            task TEXT NOT NULL,
+            interval_days INTEGER NOT NULL CHECK (interval_days > 0)
+        )
+    """)
     # Seed default locations if empty
     cursor = await db.execute("SELECT COUNT(*) FROM locations")
     count = (await cursor.fetchone())[0]
