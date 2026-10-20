@@ -50,14 +50,3 @@ class BulkImportRequest(BaseModel):
 
 class BulkImportResult(BaseModel):
     imported: int
-
-class MaintenanceScheduleIn(BaseModel):
-    task: str = Field(..., min_length=1, max_length=500)
-    interval_days: int = Field(..., gt=0)
-
-class MaintenanceScheduleOut(BaseModel):
-    asset_id: int
-    task: str
-    interval_days: int
-    last_performed_at: Optional[str] = None
-    next_due_at: Optional[str] = None

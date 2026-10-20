@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
@@ -15,8 +14,6 @@ from .schemas import (
     LocationOut,
     MaintenanceEventCreate,
     MaintenanceEventOut,
-    MaintenanceScheduleIn,
-    MaintenanceScheduleOut,
 )
 
 
@@ -170,79 +167,6 @@ async def list_maintenance_events(
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
-
-
-@app.put(
-    "/assets/{asset_id}/maintenance-schedule",
-    response_model=MaintenanceScheduleOut,
-)
-async def set_maintenance_schedule(
-    asset_id: int,
-    body: MaintenanceScheduleIn,
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    await _require_asset(asset_id, db)
-    await db.execute(
-        "INSERT INTO maintenance_schedules (asset_id, task, interval_days) "
-        "VALUES (?, ?, ?) "
-        "ON CONFLICT(asset_id) DO UPDATE SET "
-        "task = excluded.task, interval_days = excluded.interval_days",
-        (asset_id, body.task, body.interval_days),
-    )
-    await db.commit()
-    return {
-        "asset_id": asset_id,
-        "task": body.task,
-        "interval_days": body.interval_days,
-        "last_performed_at": None,
-        "next_due_at": None,
-    }
-
-
-@app.get(
-    "/assets/{asset_id}/maintenance-schedule",
-    response_model=MaintenanceScheduleOut,
-)
-async def get_maintenance_schedule(
-    asset_id: int,
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    await _require_asset(asset_id, db)
-    cursor = await db.execute(
-        "SELECT asset_id, task, interval_days FROM maintenance_schedules WHERE asset_id = ?",
-        (asset_id,),
-    )
-    schedule = await cursor.fetchone()
-    if schedule is None:
-        raise HTTPException(status_code=404, detail="Maintenance schedule not found")
-
-    cursor = await db.execute(
-        "SELECT MAX(due_at) FROM maintenance_events WHERE asset_id = ? AND completed = 1 "
-        "AND due_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'",
-        (asset_id,),
-    )
-    last_performed_at = (await cursor.fetchone())[0]
-
-    cursor = await db.execute("SELECT installed_date FROM assets WHERE id = ?", (asset_id,))
-    installed_date = (await cursor.fetchone())[0]
-
-    base = last_performed_at or installed_date
-    next_due_at = None
-    if base is not None:
-        try:
-            next_due_at = (
-                date.fromisoformat(base) + timedelta(days=schedule["interval_days"])
-            ).isoformat()
-        except ValueError:
-            pass
-
-    return {
-        "asset_id": schedule["asset_id"],
-        "task": schedule["task"],
-        "interval_days": schedule["interval_days"],
-        "last_performed_at": last_performed_at,
-        "next_due_at": next_due_at,
-    }
 
 
 # Serve the static dashboard UI at "/". Mounted last so API routes take precedence.

@@ -57,8 +57,6 @@ with Claude Code.
 | DELETE | `/assets/{id}` | Delete asset |
 | GET | `/assets/{id}/maintenance` | List maintenance events for an asset (sorted by due date) |
 | POST | `/assets/{id}/maintenance` | Create a maintenance event for an asset |
-| PUT | `/assets/{id}/maintenance-schedule` | Set or replace the asset's maintenance schedule (task, interval in days) |
-| GET | `/assets/{id}/maintenance-schedule` | Get the schedule with last performed date and next due date |
 | GET | `/locations` | List locations |
 | GET | `/health` | Health check |
 
