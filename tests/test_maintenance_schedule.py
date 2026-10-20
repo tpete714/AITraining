@@ -74,3 +74,75 @@ async def test_put_schedule_asset_not_found(client):
         json={"task": "Inspection", "interval_days": 30},
     )
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_not_found_without_schedule(client):
+    asset_id = await _create_asset(client)
+    r = await client.get(f"/assets/{asset_id}/maintenance-schedule")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_asset_not_found(client):
+    r = await client.get("/assets/9999/maintenance-schedule")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_next_due_uses_installed_date_when_never_serviced(client):
+    asset_id = await _create_asset(client, installed_date="2025-03-15")
+    await client.put(
+        f"/assets/{asset_id}/maintenance-schedule",
+        json={"task": "Quarterly inspection", "interval_days": 90},
+    )
+    r = await client.get(f"/assets/{asset_id}/maintenance-schedule")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["last_performed_at"] is None
+    assert body["next_due_at"] == "2025-06-13"
+
+
+@pytest.mark.asyncio
+async def test_get_schedule_next_due_is_null_without_any_base_date(client):
+    asset_id = await _create_asset(client)
+    await client.put(
+        f"/assets/{asset_id}/maintenance-schedule",
+        json={"task": "Quarterly inspection", "interval_days": 90},
+    )
+    r = await client.get(f"/assets/{asset_id}/maintenance-schedule")
+    assert r.json()["next_due_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_completed_service_moves_last_performed_and_next_due(client):
+    asset_id = await _create_asset(client, installed_date="2025-03-15")
+    await client.put(
+        f"/assets/{asset_id}/maintenance-schedule",
+        json={"task": "Quarterly inspection", "interval_days": 90},
+    )
+    await client.post(f"/assets/{asset_id}/maintenance", json={
+        "due_at": "2026-10-01",
+        "task": "Quarterly inspection",
+        "completed": True,
+    })
+    r = await client.get(f"/assets/{asset_id}/maintenance-schedule")
+    body = r.json()
+    assert body["last_performed_at"] == "2026-10-01"
+    assert body["next_due_at"] == "2026-12-30"
+
+
+@pytest.mark.asyncio
+async def test_incomplete_event_does_not_count_as_performed(client):
+    asset_id = await _create_asset(client, installed_date="2025-03-15")
+    await client.put(
+        f"/assets/{asset_id}/maintenance-schedule",
+        json={"task": "Quarterly inspection", "interval_days": 90},
+    )
+    await client.post(f"/assets/{asset_id}/maintenance", json={
+        "due_at": "2026-10-01",
+        "task": "Quarterly inspection",
+        "completed": False,
+    })
+    r = await client.get(f"/assets/{asset_id}/maintenance-schedule")
+    assert r.json()["last_performed_at"] is None
