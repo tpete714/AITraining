@@ -1,10 +1,10 @@
 """Bulk import and search endpoints for assets."""
-from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 import aiosqlite
 
 from .database import get_db
+from .overdue import with_overdue
 from .schemas import AssetOut, BulkImportRequest, BulkImportResult
 
 router = APIRouter()
@@ -33,11 +33,4 @@ async def search_assets(q: str = "", db: aiosqlite.Connection = Depends(get_db))
         (f"%{q}%", f"%{q}%"),
     )
     rows = await cursor.fetchall()
-    today = date.today().isoformat()
-    return [
-        {
-            **dict(r),
-            "is_overdue": r["next_service_date"] is None or r["next_service_date"] < today,
-        }
-        for r in rows
-    ]
+    return [with_overdue(r) for r in rows]

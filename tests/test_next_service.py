@@ -113,3 +113,24 @@ async def test_put_rejects_invalid_date(client):
     asset = await _create(client)
     r = await client.put(f"/assets/{asset['id']}", json={"next_service_date": "not-a-date"})
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_assets_reports_is_overdue(client):
+    await _create(client, tag="PLC-0001", next_service_date="2020-01-01")
+    await _create(client, tag="PLC-0002", next_service_date="2999-01-01")
+    r = await client.get("/assets")
+    assert r.status_code == 200
+    by_tag = {a["asset_tag"]: a for a in r.json()}
+    assert by_tag["PLC-0001"]["is_overdue"] is True
+    assert by_tag["PLC-0002"]["is_overdue"] is False
+
+
+@pytest.mark.asyncio
+async def test_search_assets_reports_is_overdue(client):
+    await _create(client, tag="PLC-0003", next_service_date="2020-01-01", name="Searchable Drive Unit")
+    r = await client.get("/assets/search", params={"q": "Searchable"})
+    assert r.status_code == 200
+    results = r.json()
+    assert len(results) == 1
+    assert results[0]["is_overdue"] is True
