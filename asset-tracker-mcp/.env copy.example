@@ -1,0 +1,8 @@
+# Base URL of the running Rockwell Asset Tracker API.
+API_BASE_URL=http://127.0.0.1:8000
+
+# Host/port this MCP server listens on (streamable-http transport).
+MCP_HOST=127.0.0.1
+MCP_PORT=9000
+
+# This API requires no authentication, so no token/key vars are needed.
