@@ -51,6 +51,7 @@ with Claude Code.
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/assets` | List assets (optional `?status=` and `?category=` filters) |
+| GET | `/assets?overdue=true` | Only assets overdue for service (`is_overdue` is true for each asset returned) |
 | GET | `/assets/{id}` | Get single asset |
 | POST | `/assets` | Create asset |
 | PUT | `/assets/{id}` | Update asset |
