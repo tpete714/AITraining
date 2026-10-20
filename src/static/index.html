@@ -54,7 +54,9 @@
   .btn-danger:hover { background: var(--red-light); }
 
   /* KPI strip */
-  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 20px 24px 4px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; padding: 20px 24px 4px; }
+  .kpi.clickable { cursor: pointer; }
+  .kpi.clickable:hover { border-color: var(--red); }
   .kpi { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
   .kpi .num { font-size: 34px; font-weight: 700; line-height: 1.1; }
   .kpi .cap { text-transform: uppercase; font-size: 12px; letter-spacing: 0.06em; color: var(--body); margin-top: 4px; }
@@ -76,6 +78,9 @@
   .filterbar { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
   select { height: 34px; border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; font-size: 14px; color: var(--navy); background: var(--white); }
   .count { margin-left: auto; color: var(--caption); font-size: 13px; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--navy); cursor: pointer; }
+  .flag { background: var(--red-light); color: var(--red); border: 1px solid var(--red); border-radius: 4px;
+    padding: 1px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-left: 6px; }
 
   table { width: 100%; border-collapse: collapse; }
   thead th { background: var(--navy); color: var(--white); font-weight: 700; text-transform: uppercase;
@@ -133,6 +138,7 @@
   <div class="kpi"><div class="num" id="k-active" style="color:var(--green)">0</div><div class="cap">Active</div></div>
   <div class="kpi"><div class="num" id="k-maint" style="color:var(--yellow)">0</div><div class="cap">In Maintenance</div></div>
   <div class="kpi"><div class="num" id="k-retired" style="color:var(--blue)">0</div><div class="cap">Retired</div></div>
+  <div class="kpi clickable" id="kpi-overdue"><div class="num" id="k-overdue" style="color:var(--red)">0</div><div class="cap">Overdue for Service</div></div>
 </section>
 
 <div class="layout">
@@ -157,11 +163,12 @@
         <option value="hmi">HMI</option>
         <option value="robot">Robot</option>
       </select>
+      <label class="toggle"><input type="checkbox" id="f-overdue"> Show overdue only</label>
       <span class="count" id="count">0 assets</span>
     </div>
     <table>
       <thead><tr>
-        <th>Asset Tag</th><th>Name</th><th>Category</th><th>Status</th><th>Location</th><th>Installed</th>
+        <th>Asset Tag</th><th>Name</th><th>Category</th><th>Status</th><th>Location</th><th>Installed</th><th>Next Service</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -184,6 +191,8 @@
       <select id="a-status"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="retired">Retired</option></select></div>
     <div class="field"><label>Location</label><select id="a-location"></select></div>
     <div class="field"><label>Installed Date</label><input id="a-installed" type="date"></div>
+    <div class="field"><label>Next Service Date</label><input id="a-next" type="date">
+      <div class="hint">A blank date counts as overdue until one is set</div></div>
     <div class="field"><label>Notes</label><textarea id="a-notes" rows="2"></textarea></div>
     <div class="err" id="a-err"></div>
     <div class="actions">
@@ -205,6 +214,7 @@
       <select id="d-status"><option value="active">Active</option><option value="maintenance">Maintenance</option><option value="retired">Retired</option></select></div>
     <div class="field"><label>Location</label><select id="d-location"></select></div>
     <div class="field"><label>Installed Date</label><input id="d-installed" readonly></div>
+    <div class="field"><label>Next Service Date</label><input id="d-next" type="date"></div>
     <div class="field"><label>Notes</label><textarea id="d-notes" rows="2"></textarea></div>
     <div class="err" id="d-err"></div>
     <div class="actions">
@@ -272,16 +282,19 @@ function renderKpis() {
   $("k-active").textContent = assets.filter(a => a.status === "active").length;
   $("k-maint").textContent = assets.filter(a => a.status === "maintenance").length;
   $("k-retired").textContent = assets.filter(a => a.status === "retired").length;
+  $("k-overdue").textContent = assets.filter(a => a.is_overdue).length;
 }
 
 function filtered() {
   const q = $("search").value.trim().toLowerCase();
   const st = $("f-status").value;
   const cat = $("f-category").value;
+  const overdueOnly = $("f-overdue").checked;
   return assets.filter(a => {
     if (selectedLoc && String(a.location_id) !== selectedLoc) return false;
     if (st && a.status !== st) return false;
     if (cat && a.category !== cat) return false;
+    if (overdueOnly && !a.is_overdue) return false;
     if (q && !(a.asset_tag.toLowerCase().includes(q) || a.name.toLowerCase().includes(q))) return false;
     return true;
   });
@@ -302,7 +315,8 @@ function renderTable() {
       `<td><span class="cat">${a.category}</span></td>` +
       `<td><span class="pill"><span class="dot" style="background:${STATUS_COLOR[a.status] || "var(--caption)"}"></span>${a.status}</span></td>` +
       `<td>${loc ? escapeHtml(loc.name) : "—"}</td>` +
-      `<td>${a.installed_date || "—"}</td>`;
+      `<td>${a.installed_date || "—"}</td>` +
+      `<td>${a.next_service_date || "—"}${a.is_overdue ? '<span class="flag">Overdue</span>' : ""}</td>`;
     tr.onclick = () => openDrawer(a.id);
     tb.appendChild(tr);
   }
@@ -321,7 +335,7 @@ async function loadAll() {
 /* Add modal */
 function openAdd() {
   $("a-name").value = ""; $("a-tag").value = ""; $("a-category").value = "plc";
-  $("a-status").value = "active"; $("a-installed").value = ""; $("a-notes").value = "";
+  $("a-status").value = "active"; $("a-installed").value = ""; $("a-next").value = ""; $("a-notes").value = "";
   $("a-err").textContent = "";
   fillLocationSelect($("a-location"), null);
   $("addOverlay").classList.add("open");
@@ -338,6 +352,7 @@ async function saveAdd() {
     status: $("a-status").value,
     location_id: $("a-location").value ? Number($("a-location").value) : null,
     installed_date: $("a-installed").value || null,
+    next_service_date: $("a-next").value || null,
     notes: $("a-notes").value.trim() || null,
   };
   if (!payload.name) { $("a-err").textContent = "Name is required."; return; }
@@ -360,6 +375,7 @@ function openDrawer(id) {
   $("d-category").value = a.category;
   $("d-status").value = a.status;
   $("d-installed").value = a.installed_date || "—";
+  $("d-next").value = a.next_service_date || "";
   $("d-notes").value = a.notes || "";
   $("d-err").textContent = "";
   fillLocationSelect($("d-location"), a.location_id);
@@ -374,6 +390,7 @@ async function saveDrawer() {
     category: $("d-category").value,
     status: $("d-status").value,
     location_id: $("d-location").value ? Number($("d-location").value) : null,
+    next_service_date: $("d-next").value || null,
     notes: $("d-notes").value.trim() || null,
   };
   try {
@@ -400,6 +417,8 @@ $("d-delete").onclick = deleteDrawer;
 $("search").oninput = renderTable;
 $("f-status").onchange = renderTable;
 $("f-category").onchange = renderTable;
+$("f-overdue").onchange = renderTable;
+$("kpi-overdue").onclick = () => { $("f-overdue").checked = true; renderTable(); };
 for (const ov of [$("addOverlay"), $("drawerOverlay")]) {
   ov.onclick = (e) => { if (e.target === ov) ov.classList.remove("open"); };
 }
