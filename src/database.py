@@ -29,9 +29,15 @@ async def create_schema(db):
             status TEXT NOT NULL DEFAULT 'active',
             location_id INTEGER REFERENCES locations(id),
             installed_date TEXT,
-            notes TEXT
+            notes TEXT,
+            next_service_date TEXT
         )
     """)
+    # Add the column to databases created before it existed
+    cursor = await db.execute("PRAGMA table_info(assets)")
+    asset_columns = {row[1] for row in await cursor.fetchall()}
+    if "next_service_date" not in asset_columns:
+        await db.execute("ALTER TABLE assets ADD COLUMN next_service_date TEXT")
     await db.execute("""
         CREATE TABLE IF NOT EXISTS maintenance_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
