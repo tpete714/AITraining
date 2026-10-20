@@ -134,3 +134,18 @@ async def test_search_assets_reports_is_overdue(client):
     results = r.json()
     assert len(results) == 1
     assert results[0]["is_overdue"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_overdue_filter_returns_only_overdue_assets(client):
+    await _create(client, tag="PLC-0010", next_service_date="2020-01-01")
+    await _create(client, tag="PLC-0011", next_service_date="2999-01-01")
+    await _create(client, tag="PLC-0012")
+
+    r = await client.get("/assets")
+    assert {a["asset_tag"] for a in r.json()} == {"PLC-0010", "PLC-0011", "PLC-0012"}
+
+    r = await client.get("/assets", params={"overdue": "true"})
+    assert r.status_code == 200
+    assert {a["asset_tag"] for a in r.json()} == {"PLC-0010", "PLC-0012"}
+    assert all(a["is_overdue"] for a in r.json())

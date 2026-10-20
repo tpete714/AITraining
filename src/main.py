@@ -49,6 +49,7 @@ async def list_locations(db: aiosqlite.Connection = Depends(get_db)):
 async def list_assets(
     status: Optional[str] = None,
     category: Optional[str] = None,
+    overdue: Optional[bool] = None,
     db: aiosqlite.Connection = Depends(get_db),
 ):
     query = "SELECT * FROM assets WHERE 1=1"
@@ -60,8 +61,10 @@ async def list_assets(
         query += " AND category = ?"
         params.append(category)
     cursor = await db.execute(query, params)
-    rows = await cursor.fetchall()
-    return [with_overdue(r) for r in rows]
+    assets = [with_overdue(r) for r in await cursor.fetchall()]
+    if overdue:
+        assets = [a for a in assets if a["is_overdue"]]
+    return assets
 
 
 @app.get("/assets/{asset_id}", response_model=AssetOut)
