@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -15,6 +16,7 @@ class AssetCreate(BaseModel):
     location_id: Optional[int] = None
     installed_date: Optional[str] = None
     notes: Optional[str] = None
+    next_service_date: Optional[date] = None
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = None
@@ -22,6 +24,7 @@ class AssetUpdate(BaseModel):
     status: Optional[str] = Field(default=None, pattern=r"^(active|maintenance|retired)$")
     location_id: Optional[int] = None
     notes: Optional[str] = None
+    next_service_date: Optional[date] = None
 
 class AssetOut(BaseModel):
     id: int
@@ -32,6 +35,8 @@ class AssetOut(BaseModel):
     location_id: Optional[int] = None
     installed_date: Optional[str] = None
     notes: Optional[str] = None
+    next_service_date: Optional[str] = None
+    is_overdue: bool
 
 class MaintenanceEventCreate(BaseModel):
     due_at: str = Field(..., min_length=1)

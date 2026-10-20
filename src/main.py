@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +28,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+def _with_overdue(row) -> dict:
+    asset = dict(row)
+    due = asset["next_service_date"]
+    asset["is_overdue"] = due is None or due < date.today().isoformat()
+    return asset
 
 
 app.include_router(bulk_import_router)
@@ -60,7 +68,7 @@ async def list_assets(
         params.append(category)
     cursor = await db.execute(query, params)
     rows = await cursor.fetchall()
-    return [dict(r) for r in rows]
+    return [_with_overdue(r) for r in rows]
 
 
 @app.get("/assets/{asset_id}", response_model=AssetOut)
@@ -69,22 +77,24 @@ async def get_asset(asset_id: int, db: aiosqlite.Connection = Depends(get_db)):
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Asset not found")
-    return dict(row)
+    return _with_overdue(row)
 
 
 @app.post("/assets", response_model=AssetOut, status_code=201)
 async def create_asset(body: AssetCreate, db: aiosqlite.Connection = Depends(get_db)):
+    next_service = body.next_service_date.isoformat() if body.next_service_date else None
     try:
         cursor = await db.execute(
-            """INSERT INTO assets (name, asset_tag, category, status, location_id, installed_date, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO assets (name, asset_tag, category, status, location_id, installed_date, notes, next_service_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (body.name, body.asset_tag, body.category, body.status,
-             body.location_id, body.installed_date, body.notes),
+             body.location_id, body.installed_date, body.notes, next_service),
         )
         await db.commit()
     except Exception:
         raise HTTPException(status_code=409, detail="Duplicate asset_tag")
-    return {**body.model_dump(), "id": cursor.lastrowid}
+    cursor = await db.execute("SELECT * FROM assets WHERE id = ?", (cursor.lastrowid,))
+    return _with_overdue(await cursor.fetchone())
 
 
 @app.put("/assets/{asset_id}", response_model=AssetOut)
@@ -98,9 +108,9 @@ async def update_asset(
     if not row:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    updates = body.model_dump(exclude_unset=True)
+    updates = body.model_dump(exclude_unset=True, mode="json")
     if not updates:
-        return dict(row)
+        return _with_overdue(row)
 
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [asset_id]
@@ -108,7 +118,7 @@ async def update_asset(
     await db.commit()
 
     cursor = await db.execute("SELECT * FROM assets WHERE id = ?", (asset_id,))
-    return dict(await cursor.fetchone())
+    return _with_overdue(await cursor.fetchone())
 
 
 @app.delete("/assets/{asset_id}", status_code=204)

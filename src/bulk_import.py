@@ -1,4 +1,6 @@
 """Bulk import and search endpoints for assets."""
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 import aiosqlite
 
@@ -31,4 +33,11 @@ async def search_assets(q: str = "", db: aiosqlite.Connection = Depends(get_db))
         (f"%{q}%", f"%{q}%"),
     )
     rows = await cursor.fetchall()
-    return [dict(r) for r in rows]
+    today = date.today().isoformat()
+    return [
+        {
+            **dict(r),
+            "is_overdue": r["next_service_date"] is None or r["next_service_date"] < today,
+        }
+        for r in rows
+    ]
