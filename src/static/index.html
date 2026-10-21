@@ -88,6 +88,7 @@
   tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--body); }
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: var(--surface); }
+  tbody tr.overdue-row td { background: var(--red-light); }
   .tag { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--navy); font-weight: 600; }
   .cat { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 12px; text-transform: uppercase; color: var(--navy); font-weight: 600; }
   .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); }
@@ -215,6 +216,7 @@
     <div class="field"><label>Location</label><select id="d-location"></select></div>
     <div class="field"><label>Installed Date</label><input id="d-installed" readonly></div>
     <div class="field"><label>Next Service Date</label><input id="d-next" type="date"></div>
+    <div id="d-flag" style="margin:-6px 0 14px"></div>
     <div class="field"><label>Notes</label><textarea id="d-notes" rows="2"></textarea></div>
     <div class="err" id="d-err"></div>
     <div class="actions">
@@ -309,14 +311,15 @@ function renderTable() {
   for (const a of rows) {
     const tr = document.createElement("tr");
     const loc = locById[a.location_id];
+    tr.className = a.is_overdue ? "overdue-row" : "";
     tr.innerHTML =
       `<td><span class="tag">${a.asset_tag}</span></td>` +
       `<td style="color:var(--navy);font-weight:600">${escapeHtml(a.name)}</td>` +
       `<td><span class="cat">${a.category}</span></td>` +
-      `<td><span class="pill"><span class="dot" style="background:${STATUS_COLOR[a.status] || "var(--caption)"}"></span>${a.status}</span></td>` +
+      `<td><span class="pill"><span class="dot" style="background:${STATUS_COLOR[a.status] || "var(--caption)"}"></span>${a.status}</span>${a.is_overdue ? '<span class="flag">Overdue</span>' : ""}</td>` +
       `<td>${loc ? escapeHtml(loc.name) : "—"}</td>` +
       `<td>${a.installed_date || "—"}</td>` +
-      `<td>${a.next_service_date || "—"}${a.is_overdue ? '<span class="flag">Overdue</span>' : ""}</td>`;
+      `<td>${a.next_service_date || "—"}</td>`;
     tr.onclick = () => openDrawer(a.id);
     tb.appendChild(tr);
   }
@@ -376,6 +379,7 @@ function openDrawer(id) {
   $("d-status").value = a.status;
   $("d-installed").value = a.installed_date || "—";
   $("d-next").value = a.next_service_date || "";
+  $("d-flag").innerHTML = a.is_overdue ? '<span class="flag">Overdue</span>' : "";
   $("d-notes").value = a.notes || "";
   $("d-err").textContent = "";
   fillLocationSelect($("d-location"), a.location_id);
